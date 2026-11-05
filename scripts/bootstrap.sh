@@ -29,17 +29,13 @@ fi
 mkdir -p app/src
 cp starter/App.tsx app/src/App.tsx
 
-(
-  cd app
-  vega project update-manifest --os-min 2.0 --os-version 2.0
-)
 
 cat <<'MSG'
 
 Base gerada em ./app.
 1. Edite app/src/App.tsx: STREAM_URL deve ser o endereco HTTPS do seu MoonlightWeb.
-2. cd app && npm install
-3. npx react-native build-vega
+2. cd app && vega project install --fix && npm install
+3. vega project doctor && npx react-native build-vega
 
 A compilacao gera um .vpkg; o Fire TV real precisa ser testado na rede local
 com modo de desenvolvedor/VDA. O Codespaces sozinho nao acessa o Fire TV.
