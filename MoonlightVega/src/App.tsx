@@ -106,9 +106,9 @@ const VEGA_MEDIA_KEY_BRIDGE = String.raw`
   }
 
   var binding = {
-    back:   {key:'ColorF0Red',code:'ColorF0Red',vk:0},
+    back:   {key:'Backspace',code:'Backspace',vk:8},
     play:   {key:'MediaPlayPause',code:'MediaPlayPause',vk:179},
-    rewind: {key:'ArrowLeft',code:'ArrowLeft',vk:37},
+    rewind: {key:'GoBack',code:'GoBack',vk:27},
     ff:     {key:'ArrowRight',code:'ArrowRight',vk:39}
   };
   var held = Object.create(null);
