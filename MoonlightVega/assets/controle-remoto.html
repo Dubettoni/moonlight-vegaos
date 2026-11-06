@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste do controle - Moonlight Vega</title>
+<style>
+  *{box-sizing:border-box}
+  body{background:#0b101b;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;margin:0;padding:45px}
+  h1{font-size:42px;margin:0 0 10px;color:#82c5ff}
+  .intro{font-size:22px;color:#b7c3d6;margin:0 0 28px}
+  .status{padding:26px 32px;border:2px solid #4c7aa5;border-radius:15px;background:#182c41;min-height:160px}
+  .label{color:#a4bbd4;font-size:20px;text-transform:uppercase;letter-spacing:1px}
+  #last{font-size:54px;font-weight:800;margin:12px 0 4px}
+  #detail{font-size:20px;color:#b9c8d8}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:26px 0}
+  .key{padding:17px;border:1px solid #3d526d;border-radius:12px;background:#141f30;font-size:22px;text-align:center}
+  .key strong{display:block;font-size:32px;color:#7dd3fc}
+  .hint{font-size:18px;color:#a5b7cc;line-height:1.5}
+  button{display:block;border:2px solid #e0f2fe;border-radius:12px;background:#234f87;color:white;padding:13px 25px;font-size:23px;margin:20px auto}
+  button:focus{outline:4px solid #facc15}
+</style>
+</head>
+<body>
+<h1>Moonlight Vega OS — Teste do controle</h1>
+<p class="intro">Pressione as setas, OK, Voltar e os botoes de reproducao.</p>
+<section class="status" aria-live="polite">
+  <div class="label">Ultimo evento capturado no WebView</div>
+  <div id="last">Aguardando botao...</div>
+  <div id="detail">Mantenha esta tela aberta e pressione os botoes.</div>
+</section>
+<div class="grid">
+ <div class="key">⬆ Cima<strong id="up">0</strong></div>
+ <div class="key">⬇ Baixo<strong id="down">0</strong></div>
+ <div class="key">⬅ Esquerda<strong id="left">0</strong></div>
+ <div class="key">➡ Direita<strong id="right">0</strong></div>
+ <div class="key">OK / Select<strong id="ok">0</strong></div>
+ <div class="key">Voltar<strong id="back">0</strong></div>
+ <div class="key">Play / Pause<strong id="play">0</strong></div>
+ <div class="key">Avancar<strong id="ff">0</strong></div>
+ <div class="key">Retroceder<strong id="rw">0</strong></div>
+</div>
+<button type="button" id="focus">Foco do controle (pressione OK)</button>
+<p class="hint">Este teste mede os eventos de teclado recebidos pela camada WebView. Nao envia comandos ao PC. Home, volume e liga/desliga podem ser interceptados pelo sistema.</p>
+<script>
+(function(){
+  var counts={up:0,down:0,left:0,right:0,ok:0,back:0,play:0,ff:0,rw:0};
+  var mapping={ArrowUp:['up','Cima'],ArrowDown:['down','Baixo'],ArrowLeft:['left','Esquerda'],ArrowRight:['right','Direita'],Enter:['ok','OK'],GoBack:['back','Voltar'],Escape:['back','Voltar'],MediaPlayPause:['play','Play/Pause'],MediaFastForward:['ff','Avancar'],MediaRewind:['rw','Retroceder']};
+  var fallback={38:['up','Cima'],40:['down','Baixo'],37:['left','Esquerda'],39:['right','Direita'],13:['ok','OK'],27:['back','Voltar'],179:['play','Play/Pause'],228:['ff','Avancar'],227:['rw','Retroceder']};
+  document.addEventListener('keydown',function(e){
+    var item=mapping[e.key]||fallback[e.keyCode];
+    var keyname=item?item[1]:(e.key||'Desconhecido');
+    if(item){counts[item[0]]+=1;document.getElementById(item[0]).textContent=String(counts[item[0]]);}
+    document.getElementById('last').textContent=keyname;
+    document.getElementById('detail').textContent='keydown | key='+String(e.key)+' | keyCode='+String(e.keyCode)+' | repeat='+String(e.repeat)+' | '+new Date().toLocaleTimeString();
+    if(item && ['up','down','left','right','back'].includes(item[0])) e.preventDefault();
+  },true);
+  window.addEventListener('load',function(){document.getElementById('focus').focus();});
+  document.getElementById('focus').addEventListener('click',function(){
+    document.getElementById('detail').textContent='OK acionou um elemento interativo ('+new Date().toLocaleTimeString()+')';
+  });
+})();
+</script>
+</body>
+</html>
