@@ -78,6 +78,33 @@ const VEGA_MEDIA_KEY_BRIDGE = String.raw`
   if (window.__vegaMediaBridgeInstalled) return true;
   window.__vegaMediaBridgeInstalled = true;
 
+  // Diagnostico temporario: exibe teclas fisicas na tela do Fire TV.
+  var probeLines = [];
+  var probePanel = null;
+  function probeShow(message) {
+    probeLines.push(new Date().toLocaleTimeString() + ' ' + message);
+    if (probeLines.length > 9) probeLines.shift();
+    if (!probePanel) {
+      probePanel = document.createElement('div');
+      probePanel.id = 'vega-key-probe';
+      probePanel.style.cssText = 'position:fixed;top:8px;left:8px;z-index:2147483647;background:rgba(0,0,0,.88);color:#00ff91;padding:12px;font:14px monospace;white-space:pre-wrap;pointer-events:none;max-width:95vw;border:1px solid #00ff91';
+      (document.body || document.documentElement).appendChild(probePanel);
+    }
+    probePanel.textContent = 'VEGA KEY DEBUG (teclas fisicas)\\n' + probeLines.join('\\n');
+  }
+  function probePhysical(e) {
+    if (!e.isTrusted) return;
+    probeShow(e.type + ' key=' + e.key + ' code=' + e.code + ' keyCode=' + (e.keyCode || e.which || 0));
+    console.info('[VegaKeyProbe]', e.type, e.key, e.code, e.keyCode || e.which || 0);
+  }
+  window.addEventListener('keydown', probePhysical, true);
+  window.addEventListener('keyup', probePhysical, true);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){probeShow('Aguardando botoes do controle...');}, {once:true});
+  } else {
+    probeShow('Aguardando botoes do controle...');
+  }
+
   var binding = {
     back:   {key:'ColorF0Red',code:'ColorF0Red',vk:0},
     play:   {key:'MediaPlayPause',code:'MediaPlayPause',vk:179},
