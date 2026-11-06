@@ -78,9 +78,35 @@ const VEGA_MEDIA_KEY_BRIDGE = String.raw`
   if (window.__vegaMediaBridgeInstalled) return true;
   window.__vegaMediaBridgeInstalled = true;
 
+  // Diagnostico temporario: exibe teclas fisicas na tela do Fire TV.
+  var probeLines = [];
+  var probePanel = null;
+  function probeShow(message) {
+    probeLines.push(new Date().toLocaleTimeString() + ' ' + message);
+    if (probeLines.length > 9) probeLines.shift();
+    if (!probePanel) {
+      probePanel = document.createElement('div');
+      probePanel.id = 'vega-key-probe';
+      probePanel.style.cssText = 'position:fixed;top:8px;left:8px;z-index:2147483647;background:rgba(0,0,0,.88);color:#00ff91;padding:12px;font:14px monospace;white-space:pre-wrap;pointer-events:none;max-width:95vw;border:1px solid #00ff91';
+      (document.body || document.documentElement).appendChild(probePanel);
+    }
+    probePanel.textContent = 'VEGA KEY DEBUG (teclas fisicas)\\n' + probeLines.join('\\n');
+  }
+  function probePhysical(e) {
+    if (!e.isTrusted) return;
+    probeShow(e.type + ' key=' + e.key + ' code=' + e.code + ' keyCode=' + (e.keyCode || e.which || 0));
+    console.info('[VegaKeyProbe]', e.type, e.key, e.code, e.keyCode || e.which || 0);
+  }
+  window.addEventListener('keydown', probePhysical, true);
+  window.addEventListener('keyup', probePhysical, true);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){probeShow('Aguardando botoes do controle...');}, {once:true});
+  } else {
+    probeShow('Aguardando botoes do controle...');
+  }
+
   var binding = {
-    back:   {key:'Backspace',code:'Backspace',vk:8},
-    menu:   {key:'Escape',code:'Escape',vk:27},
+    back:   {key:'ColorF0Red',code:'ColorF0Red',vk:0},
     play:   {key:'MediaPlayPause',code:'MediaPlayPause',vk:179},
     rewind: {key:'ArrowLeft',code:'ArrowLeft',vk:37},
     ff:     {key:'ArrowRight',code:'ArrowRight',vk:39}
@@ -123,36 +149,12 @@ const VEGA_MEDIA_KEY_BRIDGE = String.raw`
     emit('keyup', name, false);
   }
 
-  // Short Back sends Backspace to remote Android; hold >=2s sends Escape for Moonlight menu.
-  // Physical GoBack must be consumed before the Moonlight page sees it.
-  var backHold = null;
   function onPhysical(event) {
     if (!event.isTrusted) return;
     var name = source(event);
     if (!name) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-
-    if (name === 'back') {
-      if (event.type === 'keydown') {
-        if (!backHold) {
-          backHold = {long:false, timer:setTimeout(function () {
-            if (!backHold) return;
-            backHold.long = true;
-            emit('keydown', 'menu', false);
-            emit('keyup', 'menu', false);
-          }, 2000)};
-        }
-      } else if (backHold) {
-        clearTimeout(backHold.timer);
-        if (!backHold.long) {
-          emit('keydown', 'back', false);
-          emit('keyup', 'back', false);
-        }
-        backHold = null;
-      }
-      return;
-    }
 
     if (event.type === 'keyup') {
       release(name);
