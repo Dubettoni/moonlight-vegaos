@@ -11,10 +11,24 @@ import {
   WebViewErrorEvent,
   WebViewHttpErrorEvent,
   WebViewNavigationEvent,
+  WebViewMessageEvent,
 } from '@amazon-devices/webview/dist/types/WebViewTypes';
 
 export const App = () => {
   const webRef = useRef(null);
+  const onRemoteBridgeMessage = ({nativeEvent: {data}}: WebViewMessageEvent) => {
+    if (data !== 'MOONLIGHT_VEGA_ANDROID_BACK_V1') return;
+    // Native networking (not browser fetch) avoids HTTPS->LAN mixed-content blocking.
+    fetch('http://192.168.0.100:18843/back', {method: 'POST'})
+      .then(response => {
+        if (!response.ok) {
+          console.error('[Moonlight Vega] Android BACK bridge HTTP ' + response.status);
+        } else {
+          console.info('[Moonlight Vega] Android KEYCODE_BACK delivered');
+        }
+      })
+      .catch(error => console.error('[Moonlight Vega] Android BACK bridge unavailable', error));
+  };
   // By default splash screen is shown in app launch, as the splash
   // screen images are bundled in this app (assets/raw/ folder)
   // Declare that application wants to extend splash screen lifecycle
@@ -24,6 +38,7 @@ export const App = () => {
     <View style={styles.container}>
       <WebView
         injectedJavaScriptBeforeContentLoaded={VEGA_MEDIA_KEY_BRIDGE}
+        onMessage={onRemoteBridgeMessage}
         ref={webRef}
         style={styles.webview}
         allowSystemKeyEvents
@@ -146,13 +161,13 @@ const VEGA_MEDIA_KEY_BRIDGE = String.raw`
   }
 
   function androidBack() {
-    streamView().then(function (view) {
-      var data = {key:'Escape',code:'Escape',keyCode:27,gaming:true,
-        ctrlKey:false,shiftKey:false,altKey:false,metaKey:false};
-      view._sendKeyEvent(Object.assign({type:'keydown'}, data));
-      view._sendKeyEvent(Object.assign({type:'keyup'}, data));
-      notify('Voltar enviado ao Android TV');
-    }).catch(function (e) { notify('Voltar: ' + e.message, true); });
+    var bridge = window.ReactNativeWebView;
+    if (!bridge || typeof bridge.postMessage !== 'function') {
+      notify('Voltar: ponte nativa indisponivel', true);
+      return;
+    }
+    bridge.postMessage('MOONLIGHT_VEGA_ANDROID_BACK_V1');
+    notify('Android BACK solicitado');
   }
 
   // Keep existing Play/Pause and Fast Forward behavior intact.
