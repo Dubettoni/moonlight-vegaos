@@ -73,80 +73,105 @@ const styles = StyleSheet.create({
 });
 
 // VEGA_MEDIA_BRIDGE_INSTALLED
+// MoonlightWeb 0.4.1: use its StreamView methods, not untrusted synthetic
+// KeyboardEvents. MediaRewind opens the built-in remote menu. GoBack sends
+// VK_ESCAPE to the Windows host (Android emulator Back).
 const VEGA_MEDIA_KEY_BRIDGE = String.raw`
 (function () {
   if (window.__vegaMediaBridgeInstalled) return true;
   window.__vegaMediaBridgeInstalled = true;
 
-  // Diagnostico temporario: exibe teclas fisicas na tela do Fire TV.
-  var probeLines = [];
-  var probePanel = null;
-  function probeShow(message) {
-    probeLines.push(new Date().toLocaleTimeString() + ' ' + message);
-    if (probeLines.length > 9) probeLines.shift();
-    if (!probePanel) {
-      probePanel = document.createElement('div');
-      probePanel.id = 'vega-key-probe';
-      probePanel.style.cssText = 'position:fixed;top:8px;left:8px;z-index:2147483647;background:rgba(0,0,0,.88);color:#00ff91;padding:12px;font:14px monospace;white-space:pre-wrap;pointer-events:none;max-width:95vw;border:1px solid #00ff91';
-      (document.body || document.documentElement).appendChild(probePanel);
-    }
-    probePanel.textContent = 'VEGA KEY DEBUG (teclas fisicas)\\n' + probeLines.join('\\n');
-  }
-  function probePhysical(e) {
-    if (!e.isTrusted) return;
-    probeShow(e.type + ' key=' + e.key + ' code=' + e.code + ' keyCode=' + (e.keyCode || e.which || 0));
-    console.info('[VegaKeyProbe]', e.type, e.key, e.code, e.keyCode || e.which || 0);
-  }
-  window.addEventListener('keydown', probePhysical, true);
-  window.addEventListener('keyup', probePhysical, true);
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function(){probeShow('Aguardando botoes do controle...');}, {once:true});
-  } else {
-    probeShow('Aguardando botoes do controle...');
-  }
-
-  var binding = {
-    back:   {key:'Backspace',code:'Backspace',vk:8},
-    play:   {key:'MediaPlayPause',code:'MediaPlayPause',vk:179},
-    rewind: {key:'GoBack',code:'GoBack',vk:27},
-    ff:     {key:'ArrowRight',code:'ArrowRight',vk:39}
-  };
+  var appModulePromise = null;
   var held = Object.create(null);
+  var statusPanel = null;
+  var statusTimer = null;
 
-  function source(e) {
-    var key = e.key || '', code = e.code || '';
-    var n = Number(e.keyCode || e.which || 0);
+  function notify(message, isError) {
+    console.info('[Moonlight Vega remote]', message);
+    if (!statusPanel) {
+      statusPanel = document.createElement('div');
+      statusPanel.style.cssText = 'position:fixed;right:12px;top:12px;z-index:2147483647;background:rgba(0,0,0,.80);color:#afffbc;padding:8px 12px;border-radius:7px;font:14px sans-serif;pointer-events:none';
+      (document.body || document.documentElement).appendChild(statusPanel);
+    }
+    statusPanel.textContent = message;
+    statusPanel.style.color = isError ? '#ffabab' : '#afffbc';
+    statusPanel.style.display = 'block';
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () {
+      if (statusPanel) statusPanel.style.display = 'none';
+    }, isError ? 4500 : 1600);
+  }
+
+  function streamView() {
+    if (!appModulePromise) {
+      var entry = document.querySelector('script[type="module"][src*="/js/app.js"]');
+      if (!entry) {
+        return Promise.reject(new Error('Modulo MoonlightWeb nao encontrado'));
+      }
+      appModulePromise = import(entry.src).then(function (mod) {
+        if (!mod.MoonlightApp) throw new Error('MoonlightApp indisponivel');
+        return mod.MoonlightApp;
+      }).catch(function (err) {
+        appModulePromise = null;
+        throw err;
+      });
+    }
+    return appModulePromise.then(function (app) {
+      if (!app.streamView || app.streamView._quitting)
+        throw new Error('Streaming nao esta ativo');
+      return app.streamView;
+    });
+  }
+
+  function source(event) {
+    var key = event.key || '', code = event.code || '';
+    var n = Number(event.keyCode || event.which || 0);
     if (key === 'GoBack' || key === 'BrowserBack' ||
-        code === 'GoBack' || code === 'BrowserBack' || n === 27) return 'back';
-    if (key === 'MediaPlayPause' || code === 'MediaPlayPause' || n === 179) return 'play';
-    if (key === 'MediaRewind' || code === 'MediaRewind' || n === 227) return 'rewind';
-    if (key === 'MediaFastForward' || code === 'MediaFastForward' || n === 228) return 'ff';
+        code === 'GoBack' || code === 'BrowserBack' || n === 27)
+      return 'back';
+    if (key === 'MediaRewind' || code === 'MediaRewind' || n === 227)
+      return 'menu';
+    if (key === 'MediaPlayPause' || code === 'MediaPlayPause' || n === 179)
+      return 'play';
+    if (key === 'MediaFastForward' || code === 'MediaFastForward' || n === 228)
+      return 'ff';
     return null;
   }
 
-  function emit(type, name, repeated) {
+  function menu() {
+    streamView().then(function (view) {
+      view._openRemoteMenu();
+      notify('Menu MoonlightWeb');
+    }).catch(function (e) { notify('Menu: ' + e.message, true); });
+  }
+
+  function androidBack() {
+    streamView().then(function (view) {
+      var data = {key:'Escape',code:'Escape',keyCode:27,gaming:true,
+        ctrlKey:false,shiftKey:false,altKey:false,metaKey:false};
+      view._sendKeyEvent(Object.assign({type:'keydown'}, data));
+      view._sendKeyEvent(Object.assign({type:'keyup'}, data));
+      notify('Voltar enviado ao Android TV');
+    }).catch(function (e) { notify('Voltar: ' + e.message, true); });
+  }
+
+  // Keep existing Play/Pause and Fast Forward behavior intact.
+  var binding = {
+    play: {key:'MediaPlayPause', code:'MediaPlayPause', vk:179},
+    ff:   {key:'ArrowRight', code:'ArrowRight', vk:39}
+  };
+  function emit(type, name, repeat) {
     var m = binding[name];
     var e = new KeyboardEvent(type, {
-      key:m.key, code:m.code, bubbles:true, cancelable:true,
-      repeat:!!repeated
+      key:m.key, code:m.code, bubbles:true, cancelable:true, repeat:!!repeat
     });
     try {
       Object.defineProperty(e, 'keyCode', {get:function(){return m.vk;}});
       Object.defineProperty(e, 'which', {get:function(){return m.vk;}});
-    } catch (error) {
-      console.warn('[Moonlight Vega] keyCode:', error);
-    }
+    } catch (_) {}
     var target = document.activeElement;
     if (!target || !target.isConnected) target = document.body || document;
     target.dispatchEvent(e);
-  }
-
-  function release(name) {
-    var old = held[name];
-    if (!old) return;
-    clearTimeout(old.timer);
-    delete held[name];
-    emit('keyup', name, false);
   }
 
   function onPhysical(event) {
@@ -156,18 +181,25 @@ const VEGA_MEDIA_KEY_BRIDGE = String.raw`
     event.preventDefault();
     event.stopImmediatePropagation();
 
+    if (name === 'back' || name === 'menu') {
+      if (event.type === 'keydown' && !held[name]) {
+        held[name] = true;
+        if (name === 'back') androidBack(); else menu();
+      }
+      if (event.type === 'keyup') held[name] = false;
+      return;
+    }
     if (event.type === 'keyup') {
-      release(name);
+      if (held[name]) emit('keyup', name, false);
+      held[name] = false;
       return;
     }
     if (!held[name]) {
-      held[name] = {timer:null};
+      held[name] = true;
       emit('keydown', name, false);
-    } else if (name === 'rewind' || name === 'ff') {
+    } else if (name === 'ff') {
       emit('keydown', name, true);
     }
-    clearTimeout(held[name].timer);
-    held[name].timer = setTimeout(function(){release(name);}, 1800);
   }
 
   window.addEventListener('keydown', onPhysical, true);
