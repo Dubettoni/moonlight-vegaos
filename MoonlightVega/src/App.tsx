@@ -17,6 +17,12 @@ import {
 export const App = () => {
   const webRef = useRef(null);
   const onRemoteBridgeMessage = ({nativeEvent: {data}}: WebViewMessageEvent) => {
+    if (data === 'MOONLIGHT_VEGA_BRIDGE_HEALTH_V1') {
+      fetch('http://192.168.0.100:18843/health')
+        .then(response => console.info('[Moonlight Vega] Android bridge health: ' + response.status))
+        .catch(error => console.error('[Moonlight Vega] Android bridge health failed', error));
+      return;
+    }
     if (data !== 'MOONLIGHT_VEGA_ANDROID_BACK_V1') return;
     // Native networking (not browser fetch) avoids HTTPS->LAN mixed-content blocking.
     fetch('http://192.168.0.100:18843/back', {method: 'POST'})
@@ -95,6 +101,12 @@ const VEGA_MEDIA_KEY_BRIDGE = String.raw`
 (function () {
   if (window.__vegaMediaBridgeInstalled) return true;
   window.__vegaMediaBridgeInstalled = true;
+  // Non-destructive connectivity check after WebView starts; logged on Windows.
+  window.addEventListener('load', function () {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage('MOONLIGHT_VEGA_BRIDGE_HEALTH_V1');
+    }
+  }, {once:true});
 
   var appModulePromise = null;
   var held = Object.create(null);
